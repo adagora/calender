@@ -1,0 +1,5 @@
+.full__calender {
+    height: '100vh';
+    display: flex;
+    background-color: blue;
+};
