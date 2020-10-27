@@ -1,7 +1,4 @@
-/* global gapi */
 import React from 'react';
-import moment from 'moment';
-import Button from './Button';
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import {
@@ -10,119 +7,103 @@ import {
   DISCOVERY_DOCS as discoveryDocs,
   SCOPES as scope,
 } from './requests';
-import UserCalendar from './UserCalendarList';
+
+
+const now = new Date();
+let calApiLoaded;
+let firstDay = new Date(now.getFullYear(), now.getMonth() - 1, -7);
+let lastDay = new Date(now.getFullYear(), now.getMonth() + 2, 14);
 
 
 
 class App extends React.Component {
-  state = {
-    events: [],
-    isSignedIn: false,
-  };
+	constructor(props) {
+        super(props);
 
-  componentDidMount() {
-    // Init gapi
-    gapi
-    .load('client:auth2', () => {
-      gapi
-      .client
-      .init({
-        apiKey,
-        clientId, 
-        discoveryDocs, 
-        scope,
-      })
-      .then(() => {
-        gapi.auth2.getAuthInstance().isSignedIn.listen(this.updateSigninStatus);
-        this.updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
-      });
-    });
-  }
+        this.state = {
+            events: []
+        };
+        console.log(this.state.events)
+    }
+    
+    componentDidMount() {
+       window.onGoogleLoad = () => {
+           window.gapi.load('client', this.initClient);
+       }
+      // this.loadGoogleSDK();
+   }
+    // Load the SDK asynchronously
+    /* loadGoogleSDK = () => {
+        (function (d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) {
+                onGoogleLoad();
+                return;
+            }
+            js = d.createElement(s);
+            js.id = id;
+            js.src = "https://apis.google.com/js/api.js?onload=onGoogleLoad";
+            js.onload = "onGoogleLoad";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'google-jssdk'));
+    };
 
-  transformEventsToBigCalendar = (items) => {
-    return items.map(
-      ({id, summary: title, start: originalStart, end: originalEnd}) => {
-        let allDay;
-        let start;
-        let end;
+   */
 
-        if (originalStart.date === undefined) {
-          allDay = false;
-          start = moment(originalStart.dateTime).toDate();
-          end = moment(originalEnd.dateTime).toDate();
-        } else {
-          allDay = true;
-          start = moment(originalStart.date).toDate();
-          end = moment.utc(originalEnd.date).toDate();
+    initClient = () => {
+        window.gapi.client.init({
+            apiKey,
+            clientId,
+            discoveryDocs,
+            scope
+        }).then(() => {
+            calApiLoaded = true;
+            this.getEvents(firstDay, lastDay);
+        });
+    }
+
+
+    getEvents = (firstDay, lastDay) => {
+        if (calApiLoaded) {
+            window.gapi.client.calendar.events.list({
+                'calendarId': 'primary',
+                'timeMin': firstDay.toISOString(),
+                'timeMax': lastDay.toISOString(),
+                'showDeleted': false,
+                'singleEvents': true,
+                'maxResults': 100,
+                'orderBy': 'startTime'
+            }).then((response) => {
+                let event;
+                const events = response.result.items;
+                console.log('EVENTS: ',events)
+                const eventList = [];
+                for (var i = 0; i < events.length; ++i) {
+                    event = events[i];
+                    eventList.push({
+                        start: new Date(event.start.date || event.start.dateTime),
+                        end: new Date(event.end.date || event.end.dateTime),
+                        text: event.summary || 'No Title'
+                    });
+                }
+                this.setState({ events: eventList });
+
+                console.log(response)
+            });
         }
-
-        return {allDay, id, title, start, end};
-      }
-    );
-  }
-  
-  getEvents = async () => {
-    try {
-      const {result: {items}} = await gapi.client.calendar.events.list({
-        calendarId: 'primary',
-        timeMin: (new Date()).toISOString(),
-        showDeleted: false,
-        singleEvents: true,
-        maxResults: 10,
-        orderBy: 'startTime',
-        maxAttendees: 3,
-      });
-      return this.transformEventsToBigCalendar(items)
-    } catch (e) {
-      console.error(e);
     }
-  }
-
-  handleLogin = () => {
-    gapi.auth2.getAuthInstance().signIn();
-  }
-
-  handleLogout = () => {
-    gapi.auth2.getAuthInstance().signOut();
-  }
-
-  updateSigninStatus = async (isSignedIn) => {
-    if (isSignedIn) {
-      const events = await this.getEvents();
-
-      this.setState({
-        events,
-        isSignedIn: true
-      });
-    } else {
-      this.setState({
-        events: [],
-        isSignedIn: false
-      });
-    }
-  }
-  
-  render() {
-    const {
-      events,
-      isSignedIn,
-    } = this.state;
-
+    
+    
+    render() {
     return (
-      isSignedIn
-      ? <>
-          <Button label="Logout" onClick={this.handleLogout} />
-          <FullCalendar
-            plugins={[ dayGridPlugin ]}
-            initialView="dayGridMonth"
-            weekends={true}
-            initialEvents={events} 
-            />
-          <UserCalendar />
-        </>
-      : <Button label="Login" onClick={this.handleLogin} />
-    );
-  }
+            <FullCalendar
+              plugins={[ dayGridPlugin ]}
+              initialView="dayGridMonth"
+              weekends={true}
+              initialEvents={this.state.events} 
+            />  
+    )
+    }
 }
 
 export default App;
